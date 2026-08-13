@@ -202,7 +202,7 @@ export default function TwibbonEditor({ template }: { template: Template }) {
                 canvas.on('mouse:down', (opt: any) => {
                     const evt = opt.e;
                     const target = opt.target;
-                    try { window.__twibbonDebug = window.__twibbonDebug || []; window.__twibbonDebug.push('mouse:down target=' + (target ? (target.type || target.constructor?.name) : 'none')); } catch (e) { }
+                    try { (window as any).__twibbonDebug = (window as any).__twibbonDebug || []; (window as any).__twibbonDebug.push('mouse:down target=' + (target ? (target.type || target.constructor?.name) : 'none')); } catch (e) { }
                     if (target && target !== templateImageRef.current) {
                         // hide controls/selection while dragging
                         (target as any).__twibbonPrev = { selectable: target.selectable, hasControls: target.hasControls, hasBorders: target.hasBorders };
@@ -216,7 +216,7 @@ export default function TwibbonEditor({ template }: { template: Template }) {
                 });
 
                 canvas.on('mouse:move', (opt: any) => {
-                    try { window.__twibbonDebug = window.__twibbonDebug || []; window.__twibbonDebug.push('mouse:move'); } catch (e) { }
+                    try { (window as any).__twibbonDebug = (window as any).__twibbonDebug || []; (window as any).__twibbonDebug.push('mouse:move'); } catch (e) { }
                     if (!manualDrag.dragging || !manualDrag.target) return;
                     const pointer = canvas.getPointer(opt.e);
                     try {
@@ -231,7 +231,7 @@ export default function TwibbonEditor({ template }: { template: Template }) {
                 });
 
                 canvas.on('mouse:up', () => {
-                    try { window.__twibbonDebug = window.__twibbonDebug || []; window.__twibbonDebug.push('mouse:up'); } catch (e) { }
+                    try { (window as any).__twibbonDebug = (window as any).__twibbonDebug || []; (window as any).__twibbonDebug.push('mouse:up'); } catch (e) { }
                     if (manualDrag.dragging) {
                         const t = manualDrag.target;
                         try {
