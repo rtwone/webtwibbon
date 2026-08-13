@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveTemplate, getTemplates, slugify, generateId, Template } from '@/lib/template-store';
-import { getBucket } from '@/lib/firebase-admin';
+import { v2 as cloudinary } from 'cloudinary';
 
 export const dynamic = 'force-dynamic';
+
+// Configure Cloudinary with env vars
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function POST(req: NextRequest) {
     try {
@@ -49,21 +56,17 @@ export async function POST(req: NextRequest) {
             slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
         }
 
-        // Upload image to Firebase Storage
-        const ext = imageFile.name.split('.').pop() || 'png';
-        const fileName = `templates/${slug}.${ext}`;
+        // Upload image to Cloudinary
         const buffer = Buffer.from(await imageFile.arrayBuffer());
+        const base64Data = `data:${imageFile.type};base64,${buffer.toString('base64')}`;
 
-        const bucket = getBucket();
-        const file = bucket.file(fileName);
-        await file.save(buffer, {
-            metadata: { contentType: imageFile.type },
-            public: true,
+        const uploadResult = await cloudinary.uploader.upload(base64Data, {
+            folder: 'twibbon-templates',
+            public_id: slug,
+            resource_type: 'image',
         });
 
-        // Construct public URL
-        const bucketName = bucket.name;
-        const imageUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+        const imageUrl = uploadResult.secure_url;
 
         const template: Template = {
             id: generateId(),
