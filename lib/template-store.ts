@@ -1,5 +1,4 @@
-import fs from 'fs';
-import path from 'path';
+import { getDb } from './firebase-admin';
 
 export interface Template {
     id: string;
@@ -15,40 +14,33 @@ export interface Template {
     createdAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const TEMPLATES_FILE = path.join(DATA_DIR, 'templates.json');
+const COLLECTION = 'templates';
 
-function ensureDataFile() {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    if (!fs.existsSync(TEMPLATES_FILE)) {
-        fs.writeFileSync(TEMPLATES_FILE, JSON.stringify([], null, 2));
-    }
+/** Get all templates from Firestore. */
+export async function getTemplates(): Promise<Template[]> {
+    const db = getDb();
+    const snap = await db.collection(COLLECTION).orderBy('createdAt', 'desc').get();
+    return snap.docs.map((doc) => doc.data() as Template);
 }
 
-export function getTemplates(): Template[] {
-    ensureDataFile();
-    const raw = fs.readFileSync(TEMPLATES_FILE, 'utf-8');
-    return JSON.parse(raw);
+/** Get a single template by slug. */
+export async function getTemplateBySlug(slug: string): Promise<Template | null> {
+    const db = getDb();
+    const snap = await db.collection(COLLECTION).where('slug', '==', slug).limit(1).get();
+    if (snap.empty) return null;
+    return snap.docs[0].data() as Template;
 }
 
-export function getTemplateBySlug(slug: string): Template | null {
-    const templates = getTemplates();
-    return templates.find((t) => t.slug === slug) || null;
+/** Save a template to Firestore. */
+export async function saveTemplate(template: Template): Promise<void> {
+    const db = getDb();
+    await db.collection(COLLECTION).doc(template.id).set(template);
 }
 
-export function saveTemplate(template: Template): void {
-    ensureDataFile();
-    const templates = getTemplates();
-    templates.push(template);
-    fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
-}
-
-export function deleteTemplate(id: string): void {
-    ensureDataFile();
-    const templates = getTemplates().filter((t) => t.id !== id);
-    fs.writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
+/** Delete a template from Firestore. */
+export async function deleteTemplate(id: string): Promise<void> {
+    const db = getDb();
+    await db.collection(COLLECTION).doc(id).delete();
 }
 
 export function slugify(text: string): string {

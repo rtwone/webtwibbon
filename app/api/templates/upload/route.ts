@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveTemplate, getTemplates, slugify, generateId, Template } from '@/lib/template-store';
-import fs from 'fs';
-import path from 'path';
+import { getBucket } from '@/lib/firebase-admin';
 
 export const dynamic = 'force-dynamic';
-
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
-
-function ensureUploadDir() {
-    if (!fs.existsSync(UPLOAD_DIR)) {
-        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-    }
-}
 
 export async function POST(req: NextRequest) {
     try {
@@ -49,25 +40,30 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        ensureUploadDir();
-
         // Generate slug
         let slug = customSlug ? slugify(customSlug) : slugify(name);
 
         // Ensure slug uniqueness
-        const existing = getTemplates();
+        const existing = await getTemplates();
         if (existing.some((t) => t.slug === slug)) {
             slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
         }
 
-        // Save image file
+        // Upload image to Firebase Storage
         const ext = imageFile.name.split('.').pop() || 'png';
-        const fileName = `${slug}.${ext}`;
-        const filePath = path.join(UPLOAD_DIR, fileName);
+        const fileName = `templates/${slug}.${ext}`;
         const buffer = Buffer.from(await imageFile.arrayBuffer());
-        fs.writeFileSync(filePath, buffer);
 
-        const imageUrl = `/uploads/${fileName}`;
+        const bucket = getBucket();
+        const file = bucket.file(fileName);
+        await file.save(buffer, {
+            metadata: { contentType: imageFile.type },
+            public: true,
+        });
+
+        // Construct public URL
+        const bucketName = bucket.name;
+        const imageUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
 
         const template: Template = {
             id: generateId(),
@@ -83,7 +79,7 @@ export async function POST(req: NextRequest) {
             createdAt: new Date().toISOString(),
         };
 
-        saveTemplate(template);
+        await saveTemplate(template);
 
         return NextResponse.json({
             success: true,

@@ -7,7 +7,7 @@ export async function GET(
     _req: NextRequest,
     { params }: { params: { slug: string } }
 ) {
-    const template = getTemplateBySlug(params.slug);
+    const template = await getTemplateBySlug(params.slug);
 
     if (!template) {
         return NextResponse.json(
