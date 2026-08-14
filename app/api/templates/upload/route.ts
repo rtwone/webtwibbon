@@ -1,15 +1,9 @@
+import { promises as fs } from 'fs';
+import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { saveTemplate, getTemplates, slugify, generateId, Template } from '@/lib/template-store';
-import { v2 as cloudinary } from 'cloudinary';
 
 export const dynamic = 'force-dynamic';
-
-// Configure Cloudinary with env vars
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 export async function POST(req: NextRequest) {
     try {
@@ -30,7 +24,6 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Validate file type
         const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
         if (!allowedTypes.includes(imageFile.type)) {
             return NextResponse.json(
@@ -39,7 +32,6 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Validate file size (max 10MB)
         if (imageFile.size > 10 * 1024 * 1024) {
             return NextResponse.json(
                 { success: false, message: 'Ukuran file terlalu besar. Maksimal 10MB.' },
@@ -47,26 +39,23 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Generate slug
         let slug = customSlug ? slugify(customSlug) : slugify(name);
 
-        // Ensure slug uniqueness
         const existing = await getTemplates();
         if (existing.some((t) => t.slug === slug)) {
             slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
         }
 
-        // Upload image to Cloudinary
+        const ext = imageFile.name.split('.').pop() || 'png';
+        const fileName = `${slug}.${ext}`;
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+        await fs.mkdir(uploadDir, { recursive: true });
+
         const buffer = Buffer.from(await imageFile.arrayBuffer());
-        const base64Data = `data:${imageFile.type};base64,${buffer.toString('base64')}`;
+        const finalPath = path.join(uploadDir, fileName);
+        await fs.writeFile(finalPath, buffer);
 
-        const uploadResult = await cloudinary.uploader.upload(base64Data, {
-            folder: 'twibbon-templates',
-            public_id: slug,
-            resource_type: 'image',
-        });
-
-        const imageUrl = uploadResult.secure_url;
+        const imageUrl = `/uploads/${fileName}`;
 
         const template: Template = {
             id: generateId(),
