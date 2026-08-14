@@ -18,14 +18,26 @@ const BLOB_KEY = 'templates.json';
 
 async function readTemplates(): Promise<Template[]> {
     try {
+        console.log('[readTemplates] Checking for templates.json in Vercel Blob...');
         const blob = await head(BLOB_KEY);
-        if (!blob) return [];
+        if (!blob) {
+            console.log('[readTemplates] No templates.json found, returning empty array');
+            return [];
+        }
 
+        console.log('[readTemplates] Found blob, fetching content from:', blob.url);
         const res = await fetch(blob.url);
+        if (!res.ok) {
+            console.error('[readTemplates] Failed to fetch blob, status:', res.status);
+            return [];
+        }
+
         const raw = await res.text();
+        console.log('[readTemplates] Fetched content length:', raw.length);
         const parsed = JSON.parse(raw);
         return Array.isArray(parsed) ? parsed : [];
-    } catch {
+    } catch (err) {
+        console.error('[readTemplates] Error:', err instanceof Error ? err.message : String(err));
         return [];
     }
 }

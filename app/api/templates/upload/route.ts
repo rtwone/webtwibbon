@@ -6,6 +6,9 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
     try {
+        console.log('=== Upload API called ===');
+        console.log('BLOB token present:', !!process.env.BLOB_READ_WRITE_TOKEN);
+
         const formData = await req.formData();
 
         const name = formData.get('name') as string;
@@ -15,6 +18,8 @@ export async function POST(req: NextRequest) {
         const height = parseInt(formData.get('height') as string, 10) || 1080;
         const customSlug = (formData.get('slug') as string) || '';
         const imageFile = formData.get('image') as File | null;
+
+        console.log('Form data:', { name, category, width, height, imageFile: imageFile ? `${imageFile.name} (${imageFile.size} bytes)` : 'none' });
 
         if (!name || !imageFile) {
             return NextResponse.json(
@@ -40,7 +45,10 @@ export async function POST(req: NextRequest) {
 
         let slug = customSlug ? slugify(customSlug) : slugify(name);
 
+        console.log('Checking existing templates...');
         const existing = await getTemplates();
+        console.log(`Found ${existing.length} existing templates`);
+
         if (existing.some((t) => t.slug === slug)) {
             slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
         }
@@ -48,11 +56,13 @@ export async function POST(req: NextRequest) {
         const ext = imageFile.name.split('.').pop() || 'png';
         const fileName = `uploads/${slug}.${ext}`;
 
+        console.log(`Starting upload to Vercel Blob: ${fileName}`);
         const blob = await put(fileName, imageFile, {
             access: 'public',
             contentType: imageFile.type,
             addRandomSuffix: false,
         });
+        console.log(`Upload successful: ${blob.url}`);
 
         const imageUrl = blob.url;
 
@@ -70,7 +80,9 @@ export async function POST(req: NextRequest) {
             createdAt: new Date().toISOString(),
         };
 
+        console.log('Saving template to metadata...');
         await saveTemplate(template);
+        console.log('Template saved successfully');
 
         return NextResponse.json({
             success: true,
@@ -78,9 +90,11 @@ export async function POST(req: NextRequest) {
             data: template,
         });
     } catch (err) {
-        console.error('Template upload error:', err);
+        console.error('❌ Template upload error:', err);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error('Error details:', errorMessage);
         return NextResponse.json(
-            { success: false, message: 'Gagal mengupload template.' },
+            { success: false, message: `Gagal mengupload template: ${errorMessage}` },
             { status: 500 }
         );
     }
