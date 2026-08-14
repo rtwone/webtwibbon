@@ -1,6 +1,5 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
+import { put } from '@vercel/blob';
 import { saveTemplate, getTemplates, slugify, generateId, Template } from '@/lib/template-store';
 
 export const dynamic = 'force-dynamic';
@@ -47,15 +46,15 @@ export async function POST(req: NextRequest) {
         }
 
         const ext = imageFile.name.split('.').pop() || 'png';
-        const fileName = `${slug}.${ext}`;
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-        await fs.mkdir(uploadDir, { recursive: true });
+        const fileName = `uploads/${slug}.${ext}`;
 
-        const buffer = Buffer.from(await imageFile.arrayBuffer());
-        const finalPath = path.join(uploadDir, fileName);
-        await fs.writeFile(finalPath, buffer);
+        const blob = await put(fileName, imageFile, {
+            access: 'public',
+            contentType: imageFile.type,
+            addRandomSuffix: false,
+        });
 
-        const imageUrl = `/uploads/${fileName}`;
+        const imageUrl = blob.url;
 
         const template: Template = {
             id: generateId(),
