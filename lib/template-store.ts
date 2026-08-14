@@ -19,7 +19,18 @@ const BLOB_KEY = 'templates.json';
 async function readTemplates(): Promise<Template[]> {
     try {
         console.log('[readTemplates] Checking for templates.json in Vercel Blob...');
-        const blob = await head(BLOB_KEY);
+        let blob;
+        try {
+            blob = await head(BLOB_KEY);
+        } catch (headErr: any) {
+            // "does not exist" is expected on first run, not an error
+            if (headErr?.message?.includes('does not exist')) {
+                console.log('[readTemplates] templates.json does not exist yet (first run), returning empty array');
+                return [];
+            }
+            throw headErr; // Re-throw if it's a different error
+        }
+
         if (!blob) {
             console.log('[readTemplates] No templates.json found, returning empty array');
             return [];
@@ -37,17 +48,24 @@ async function readTemplates(): Promise<Template[]> {
         const parsed = JSON.parse(raw);
         return Array.isArray(parsed) ? parsed : [];
     } catch (err) {
-        console.error('[readTemplates] Error:', err instanceof Error ? err.message : String(err));
+        console.error('[readTemplates] Unexpected error:', err instanceof Error ? err.message : String(err));
         return [];
     }
 }
 
 async function writeTemplates(templates: Template[]): Promise<void> {
-    await put(BLOB_KEY, JSON.stringify(templates, null, 2), {
-        access: 'public',
-        contentType: 'application/json',
-        addRandomSuffix: false,
-    });
+    try {
+        console.log('[writeTemplates] Saving', templates.length, 'templates to Vercel Blob...');
+        const result = await put(BLOB_KEY, JSON.stringify(templates, null, 2), {
+            access: 'public',
+            contentType: 'application/json',
+            addRandomSuffix: false,
+        });
+        console.log('[writeTemplates] Successfully saved to:', result.url);
+    } catch (err) {
+        console.error('[writeTemplates] Error saving templates:', err instanceof Error ? err.message : String(err));
+        throw err; // Re-throw so caller knows about the failure
+    }
 }
 
 /** Get all templates from Vercel Blob. */
