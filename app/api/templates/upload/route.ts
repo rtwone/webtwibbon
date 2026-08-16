@@ -62,7 +62,6 @@ async function uploadImageToStorage(imageFile: File, slug: string): Promise<stri
 
 export async function POST(req: NextRequest) {
     try {
-        console.log('[UPLOAD_DEBUG] Request started');
         const formData = await req.formData();
 
         const name = formData.get('name') as string;
@@ -73,21 +72,7 @@ export async function POST(req: NextRequest) {
         const customSlug = (formData.get('slug') as string) || '';
         const imageFile = formData.get('image') as File | null;
 
-        console.log('[UPLOAD_DEBUG] Parsed payload', {
-            name,
-            descriptionLength: description.length,
-            category,
-            width,
-            height,
-            slug: customSlug,
-            hasImage: !!imageFile,
-            imageName: imageFile?.name,
-            imageType: imageFile?.type,
-            imageSize: imageFile?.size,
-        });
-
         if (!name || !imageFile) {
-            console.log('[UPLOAD_DEBUG] Missing name or image file');
             return NextResponse.json(
                 { success: false, message: 'Nama dan gambar template wajib diisi.' },
                 { status: 400 }
@@ -98,10 +83,7 @@ export async function POST(req: NextRequest) {
         const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/webp'];
         const isAllowedMime = allowedMimeTypes.includes(finalMimeType);
 
-        console.log('[UPLOAD_DEBUG] MIME validation', { rawType: imageFile.type, inferredType: finalMimeType, isAllowedMime });
-
         if (!isAllowedMime) {
-            console.log('[UPLOAD_DEBUG] File type rejected');
             return NextResponse.json(
                 { success: false, message: 'Format file tidak didukung. Gunakan PNG, JPG, atau WebP.' },
                 { status: 400 }
@@ -109,7 +91,6 @@ export async function POST(req: NextRequest) {
         }
 
         if (imageFile.size > MAX_UPLOAD_BYTES) {
-            console.log('[UPLOAD_DEBUG] File size rejected', { size: imageFile.size, maxBytes: MAX_UPLOAD_BYTES, limitLabel: '4MB' });
             return NextResponse.json(
                 { success: false, message: 'Ukuran file terlalu besar untuk upload saat ini. Gunakan file di bawah 4MB.' },
                 { status: 400 }
@@ -147,7 +128,6 @@ export async function POST(req: NextRequest) {
             data: template,
         });
     } catch (err) {
-        console.error('❌ Template upload error:', err);
         const errorMessage = err instanceof Error ? err.message : String(err);
         return NextResponse.json(
             { success: false, message: `Gagal mengupload template: ${errorMessage}` },

@@ -72,14 +72,6 @@ export default function AdminDashboard() {
             formData.append('height', String(height));
             formData.append('image', imageFile);
 
-            console.log('[UPLOAD_UI_DEBUG] Sending request', {
-                name,
-                slug,
-                size: imageFile.size,
-                type: imageFile.type,
-                nameFile: imageFile.name,
-            });
-
             const res = await fetch('/api/templates/upload', {
                 method: 'POST',
                 body: formData,
@@ -88,13 +80,8 @@ export default function AdminDashboard() {
             let data: any = null;
             try {
                 data = await res.json();
-            } catch (jsonError) {
+            } catch {
                 const text = await res.text();
-                console.error('[UPLOAD_UI_DEBUG] Non-JSON response', {
-                    status: res.status,
-                    text,
-                    jsonError,
-                });
 
                 if (text.includes('Request Entity Too Large')) {
                     showToast('error', 'Ukuran file terlalu besar untuk upload saat ini. Gunakan file di bawah 4MB.');
@@ -103,8 +90,6 @@ export default function AdminDashboard() {
                 }
                 return;
             }
-
-            console.log('[UPLOAD_UI_DEBUG] Response status', res.status, data);
 
             if (data.success) {
                 showToast('success', `Template berhasil dibuat! URL: /${data.data.slug}`);
@@ -117,11 +102,9 @@ export default function AdminDashboard() {
                 setShowUpload(false);
                 fetchTemplates();
             } else {
-                console.error('[UPLOAD_UI_DEBUG] Upload rejected by API', data);
                 showToast('error', data.message || 'Gagal mengupload template.');
             }
-        } catch (error) {
-            console.error('[UPLOAD_UI_DEBUG] Catch block triggered', error);
+        } catch {
             showToast('error', 'Terjadi kesalahan saat upload.');
         } finally {
             setUploading(false);

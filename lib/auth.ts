@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const ADMIN_COOKIE = 'twibbon_admin_session';
-const ADMIN_PASSWORD = 'admin123'; // In production, use env var
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 export function isAuthenticated(req: NextRequest): boolean {
     const cookie = req.cookies.get(ADMIN_COOKIE);

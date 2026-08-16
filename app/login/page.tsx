@@ -100,9 +100,6 @@ function LoginContent() {
                         </button>
                     </form>
 
-                    <div className="mt-6 rounded-xl bg-blue-50 px-4 py-3 text-center text-xs text-muted">
-                        Demo password: <span className="font-bold text-primary">admin123</span>
-                    </div>
                 </div>
             </motion.div>
         </div>
