@@ -104,8 +104,9 @@ export default function AdminDashboard() {
             } else {
                 showToast('error', data.message || 'Gagal mengupload template.');
             }
-        } catch {
-            showToast('error', 'Terjadi kesalahan saat upload.');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Terjadi kesalahan saat upload.';
+            showToast('error', message);
         } finally {
             setUploading(false);
         }
@@ -114,6 +115,29 @@ export default function AdminDashboard() {
     const handleLogout = async () => {
         await fetch('/api/auth/login', { method: 'DELETE' });
         router.push('/login');
+    };
+
+    const handleDelete = async (id: string) => {
+        const confirmed = window.confirm('Hapus template ini?');
+        if (!confirmed) return;
+
+        try {
+            const res = await fetch('/api/templates', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            });
+
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Gagal menghapus template.');
+            }
+
+            setTemplates((current) => current.filter((item) => item.id !== id));
+            showToast('success', 'Template berhasil dihapus.');
+        } catch (error) {
+            showToast('error', error instanceof Error ? error.message : 'Gagal menghapus template.');
+        }
     };
 
     const copyUrl = (slug: string) => {
@@ -323,6 +347,12 @@ export default function AdminDashboard() {
                                             className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-muted transition hover:bg-bg hover:text-ink"
                                         >
                                             Salin
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(tpl.id)}
+                                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
+                                        >
+                                            Hapus
                                         </button>
                                         <a
                                             href={`/${tpl.slug}`}

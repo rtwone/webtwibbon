@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { head, put } from '@vercel/blob';
+import { head, put, del } from '@vercel/blob';
 
 export interface Template {
     id: string;
@@ -132,10 +132,46 @@ export async function saveTemplate(template: Template): Promise<void> {
     await writeTemplates(templates);
 }
 
+async function deleteUploadedAsset(imageUrl?: string): Promise<void> {
+    if (!imageUrl) return;
+
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        try {
+            await del(imageUrl);
+        } catch (err) {
+            console.warn('[deleteUploadedAsset] Failed to delete blob asset:', imageUrl, err);
+        }
+        return;
+    }
+
+    if (imageUrl.startsWith('/uploads/')) {
+        const localPath = path.join(process.cwd(), 'public', imageUrl.replace(/^\/+/, ''));
+        try {
+            await fs.unlink(localPath);
+        } catch (err: any) {
+            if (err?.code !== 'ENOENT') {
+                throw err;
+            }
+        }
+    }
+}
+
 /** Delete a template from local JSON storage, with Blob fallback when configured. */
 export async function deleteTemplate(id: string): Promise<void> {
-    const templates = (await readTemplates()).filter((template) => template.id !== id);
-    await writeTemplates(templates);
+    const templates = await readTemplates();
+    const target = templates.find((template) => template.id === id);
+
+    if (!target) {
+        return;
+    }
+
+    const filtered = templates.filter((template) => template.id !== id);
+    await writeTemplates(filtered);
+
+    await deleteUploadedAsset(target.image);
+    if (target.thumbnail && target.thumbnail !== target.image) {
+        await deleteUploadedAsset(target.thumbnail);
+    }
 }
 
 export function slugify(text: string): string {
