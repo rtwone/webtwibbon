@@ -72,12 +72,21 @@ export default function AdminDashboard() {
             formData.append('height', String(height));
             formData.append('image', imageFile);
 
+            console.log('[UPLOAD_UI_DEBUG] Sending request', {
+                name,
+                slug,
+                size: imageFile.size,
+                type: imageFile.type,
+                nameFile: imageFile.name,
+            });
+
             const res = await fetch('/api/templates/upload', {
                 method: 'POST',
                 body: formData,
             });
 
             const data = await res.json();
+            console.log('[UPLOAD_UI_DEBUG] Response status', res.status, data);
 
             if (data.success) {
                 showToast('success', `Template berhasil dibuat! URL: /${data.data.slug}`);
@@ -90,9 +99,11 @@ export default function AdminDashboard() {
                 setShowUpload(false);
                 fetchTemplates();
             } else {
+                console.error('[UPLOAD_UI_DEBUG] Upload rejected by API', data);
                 showToast('error', data.message || 'Gagal mengupload template.');
             }
-        } catch {
+        } catch (error) {
+            console.error('[UPLOAD_UI_DEBUG] Catch block triggered', error);
             showToast('error', 'Terjadi kesalahan saat upload.');
         } finally {
             setUploading(false);

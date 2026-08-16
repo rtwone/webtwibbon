@@ -1,41 +1,15 @@
 [
   {
-    "id": "tpl-1786898013042-6rawbc",
-    "slug": "anu",
-    "name": "Buriq",
-    "description": "asdfsdf",
-    "thumbnail": "/uploads/anu.png",
-    "image": "/uploads/anu.png",
+    "id": "tpl-1786899106686-hw51zy",
+    "slug": "browser-upload-test",
+    "name": "Browser Upload Test",
+    "description": "desc",
+    "thumbnail": "/uploads/browser-upload-test.png",
+    "image": "/uploads/browser-upload-test.png",
     "category": "umum",
     "width": 1080,
     "height": 1080,
     "active": true,
-    "createdAt": "2026-08-16T16:33:33.042Z"
-  },
-  {
-    "id": "tpl-1786651145249-gt8k3d",
-    "slug": "twibbon-pkkmb",
-    "name": "PKKMB Universitas Wiraraja 2026",
-    "description": "Twibbon resmi PKKMB Universitas Wiraraja 2026",
-    "thumbnail": "/uploads/twibbon-pkkmb.png",
-    "image": "/uploads/twibbon-pkkmb.png",
-    "category": "umum",
-    "width": 1080,
-    "height": 1080,
-    "active": true,
-    "createdAt": "2026-08-13T19:59:05.249Z"
-  },
-  {
-    "id": "tpl-1786651364054-rymdua",
-    "slug": "tesaja",
-    "name": "Tes",
-    "description": "fsdfsdf",
-    "thumbnail": "/uploads/tesaja.png",
-    "image": "/uploads/tesaja.png",
-    "category": "sfsdf",
-    "width": 1080,
-    "height": 1080,
-    "active": true,
-    "createdAt": "2026-08-13T20:02:44.054Z"
+    "createdAt": "2026-08-16T16:51:46.686Z"
   }
 ]
