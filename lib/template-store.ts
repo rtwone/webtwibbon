@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { head, put, del } from '@vercel/blob';
+import { list, put, del } from '@vercel/blob';
 
 export interface Template {
     id: string;
@@ -18,73 +18,43 @@ export interface Template {
 
 const BLOB_KEY = 'templates.json';
 
-// Cek apakah berjalan di server Vercel produksi atau komputer lokal (localhost)
-const isVercel = process.env.VERCEL === '1';
-
-// Jika di Vercel, folder cadangan dialihkan ke '/tmp' agar tidak memicu error EROFS
-const DATA_FILE = isVercel
-    ? path.join('/tmp', 'data', 'templates.json')
-    : path.join(process.cwd(), 'data', 'templates.json');
-
 function hasBlobConfig(): boolean {
-    // Diperketat hanya mendeteksi keberadaan token utama yang valid
     return Boolean(process.env.BLOB_READ_WRITE_TOKEN && process.env.BLOB_READ_WRITE_TOKEN.trim() !== '');
 }
 
-async function readLocalTemplates(): Promise<Template[]> {
+// Fungsi pembantu untuk mencari URL lengkap templates.json di Vercel Blob
+async function getBlobFileUrl(): Promise<string | null> {
     try {
-        const raw = await fs.readFile(DATA_FILE, 'utf8');
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-    } catch (err: any) {
-        if (err?.code === 'ENOENT') {
-            return [];
-        }
-        throw err;
-    }
-}
-
-async function writeLocalTemplates(templates: Template[]): Promise<void> {
-    try {
-        await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-        await fs.writeFile(DATA_FILE, JSON.stringify(templates, null, 2), 'utf8');
-    } catch (err: any) {
-        console.error('[writeLocalTemplates] Gagal menulis cadangan lokal:', err?.message);
-        // Tetap diam agar aplikasi tidak crash total saat fallback lokal bermasalah
+        // Mencari file dengan nama templates.json di dalam storage Anda
+        const { blobs } = await list({ prefix: BLOB_KEY });
+        const targetBlob = blobs.find(b => b.pathname === BLOB_KEY);
+        return targetBlob ? targetBlob.url : null;
+    } catch (err) {
+        console.error('[getBlobFileUrl] Gagal mencari berkas di Blob:', err);
+        return null;
     }
 }
 
 async function readTemplates(): Promise<Template[]> {
     if (!hasBlobConfig()) {
-        return readLocalTemplates();
+        console.log('[readTemplates] Token Blob tidak aktif.');
+        return [];
     }
 
     try {
-        console.log('[readTemplates] Memeriksa templates.json di Vercel Blob...');
-        let blob;
-        try {
-            // Menggunakan fungsi head() resmi untuk mendeteksi file di Vercel Blob
-            blob = await head(BLOB_KEY);
-        } catch (headErr: any) {
-            // Vercel Blob mengembalikan error teks jika file belum pernah dibuat sama sekali
-            if (headErr?.message?.includes('not found') || headErr?.message?.includes('does not exist')) {
-                console.log('[readTemplates] templates.json belum ada di Blob (unggahan pertama), mengembalikan array kosong');
-                return [];
-            }
-            throw headErr;
-        }
+        console.log('[readTemplates] Mencari lokasi templates.json di Vercel Blob...');
+        const blobUrl = await getBlobFileUrl();
 
-        if (!blob) {
-            console.log('[readTemplates] Blob tidak ditemukan, mengembalikan array kosong');
+        if (!blobUrl) {
+            console.log('[readTemplates]templates.json belum ada (unggahan pertama), mengembalikan array kosong');
             return [];
         }
 
-        console.log('[readTemplates] Menemukan blob, mengunduh data dari:', blob.url);
-        // Mengunduh konten teks JSON menggunakan fetch global
-        const res = await fetch(blob.url, { cache: 'no-store' });
+        console.log('[readTemplates] Menemukan file, mengunduh data dari:', blobUrl);
+        const res = await fetch(blobUrl, { cache: 'no-store' });
         if (!res.ok) {
-            console.error('[readTemplates] Gagal mengunduh berkas blob, status:', res.status);
-            return readLocalTemplates();
+            console.error('[readTemplates] Gagal mengunduh isi blob, status:', res.status);
+            return [];
         }
 
         const raw = await res.text();
@@ -93,28 +63,30 @@ async function readTemplates(): Promise<Template[]> {
         const parsed = JSON.parse(raw);
         return Array.isArray(parsed) ? parsed : [];
     } catch (err) {
-        console.error('[readTemplates] Error tidak terduga, beralih ke cadangan lokal:', err instanceof Error ? err.message : String(err));
-        return readLocalTemplates();
+        console.error('[readTemplates] Error tidak terduga:', err instanceof Error ? err.message : String(err));
+        return [];
     }
 }
 
 async function writeTemplates(templates: Template[]): Promise<void> {
     if (!hasBlobConfig()) {
-        await writeLocalTemplates(templates);
+        console.error('[writeTemplates] Gagal menyimpan, token Blob tidak aktif.');
         return;
     }
 
     try {
         console.log('[writeTemplates] Menyimpan', templates.length, 'data template ke Vercel Blob...');
+
+        // Menyimpan atau menimpa langsung file templates.json di dalam cloud Vercel Blob
         const result = await put(BLOB_KEY, JSON.stringify(templates, null, 2), {
             access: 'public',
             contentType: 'application/json',
-            addRandomSuffix: false, // Menimpa file 'templates.json' yang sama tanpa membuat file duplikat acak
+            addRandomSuffix: false, // Wajib FALSE agar file yang sama ditimpa dan tidak membuat file baru acak
         });
+
         console.log('[writeTemplates] Sukses menyimpan data ke:', result.url);
     } catch (err) {
-        console.error('[writeTemplates] Gagal menyimpan ke Blob, menggunakan cadangan lokal:', err instanceof Error ? err.message : String(err));
-        await writeLocalTemplates(templates);
+        console.error('[writeTemplates] Gagal menyimpan ke Blob:', err instanceof Error ? err.message : String(err));
     }
 }
 
@@ -136,9 +108,9 @@ export async function saveTemplate(template: Template): Promise<void> {
     const index = templates.findIndex((item) => item.id === template.id);
 
     if (index >= 0) {
-        templates[index] = template; // Timpa data jika ID sudah terdaftar (Edit Mode)
+        templates[index] = template; // Mode Edit: Timpa data lama
     } else {
-        templates.unshift(template); // Taruh di baris paling atas jika data baru
+        templates.unshift(template); // Mode Baru: Taruh di baris paling atas
     }
 
     await writeTemplates(templates);
@@ -147,7 +119,7 @@ export async function saveTemplate(template: Template): Promise<void> {
 async function deleteUploadedAsset(imageUrl?: string): Promise<void> {
     if (!imageUrl) return;
 
-    // Jika gambar tersimpan di awan (Vercel Blob), hapus menggunakan fungsi del()
+    // Jika gambar tersimpan di cloud Vercel Blob, hapus berkasnya
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
         try {
             await del(imageUrl);
@@ -155,23 +127,10 @@ async function deleteUploadedAsset(imageUrl?: string): Promise<void> {
         } catch (err) {
             console.warn('[deleteUploadedAsset] Gagal menghapus berkas di Vercel Blob:', imageUrl, err);
         }
-        return;
-    }
-
-    // Jika gambar tersimpan di folder lokal (saat mode localhost development)
-    if (imageUrl.startsWith('/uploads/')) {
-        const localPath = path.join(process.cwd(), 'public', imageUrl.replace(/^\/+/, ''));
-        try {
-            await fs.unlink(localPath);
-        } catch (err: any) {
-            if (err?.code !== 'ENOENT') {
-                throw err;
-            }
-        }
     }
 }
 
-/** Hapus template dari data JSON cloud beserta aset gambarnya */
+/** Hapus template dari data cloud beserta aset gambarnya */
 export async function deleteTemplate(id: string): Promise<void> {
     const templates = await readTemplates();
     const target = templates.find((template) => template.id === id);
@@ -183,7 +142,7 @@ export async function deleteTemplate(id: string): Promise<void> {
     const filtered = templates.filter((template) => template.id !== id);
     await writeTemplates(filtered);
 
-    // Hapus file gambar asli dari penyimpanan agar kapasitas disk tidak penuh
+    // Hapus file gambar asli dari penyimpanan biar kapasitas disk hemat
     await deleteUploadedAsset(target.image);
     if (target.thumbnail && target.thumbnail !== target.image) {
         await deleteUploadedAsset(target.thumbnail);
