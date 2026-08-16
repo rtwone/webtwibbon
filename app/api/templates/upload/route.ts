@@ -1,9 +1,11 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { put } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
 import { saveTemplate, getTemplates, slugify, generateId, Template } from '@/lib/template-store';
 
 export const dynamic = 'force-dynamic';
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 function getAllowedMimeType(file: File): string {
     const type = file.type?.toLowerCase();
@@ -17,6 +19,44 @@ function getAllowedMimeType(file: File): string {
     if (name.endsWith('.webp')) return 'image/webp';
 
     return type || 'application/octet-stream';
+}
+
+function hasBlobConfig(): boolean {
+    return Boolean(
+        process.env.BLOB_READ_WRITE_TOKEN ||
+        process.env.BLOB_TOKEN ||
+        process.env.BLOB_STORE_ID ||
+        process.env.VERCEL_OIDC_TOKEN
+    );
+}
+
+async function uploadImageToStorage(imageFile: File, slug: string): Promise<string> {
+    const ext = (imageFile.name.split('.').pop() || 'png').toLowerCase();
+    const fileBuffer = Buffer.from(await imageFile.arrayBuffer());
+
+    if (hasBlobConfig()) {
+        const blob = await put(`templates/${slug}-${Date.now()}.${ext}`, fileBuffer, {
+            access: 'public',
+            contentType: imageFile.type || 'image/png',
+            addRandomSuffix: false,
+        });
+        return blob.url;
+    }
+
+    const safeFileName = `${slug}.${ext}`;
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const fullPath = path.join(uploadDir, safeFileName);
+    try {
+        await fs.writeFile(fullPath, fileBuffer);
+        return `/uploads/${safeFileName}`;
+    } catch (error: any) {
+        if (error?.code === 'EROFS' || error?.message?.includes('read-only file system')) {
+            throw new Error('Upload storage is read-only in this environment. Configure Vercel Blob credentials for production hosting.');
+        }
+        throw error;
+    }
 }
 
 export async function POST(req: NextRequest) {
@@ -67,10 +107,10 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        if (imageFile.size > 10 * 1024 * 1024) {
-            console.log('[UPLOAD_DEBUG] File size rejected', { size: imageFile.size });
+        if (imageFile.size > MAX_UPLOAD_BYTES) {
+            console.log('[UPLOAD_DEBUG] File size rejected', { size: imageFile.size, maxBytes: MAX_UPLOAD_BYTES, limitLabel: '4MB' });
             return NextResponse.json(
-                { success: false, message: 'Ukuran file terlalu besar. Maksimal 10MB.' },
+                { success: false, message: 'Ukuran file terlalu besar untuk upload saat ini. Gunakan file di bawah 4MB.' },
                 { status: 400 }
             );
         }
@@ -82,16 +122,7 @@ export async function POST(req: NextRequest) {
             slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
         }
 
-        const ext = (imageFile.name.split('.').pop() || 'png').toLowerCase();
-        const safeFileName = `${slug}.${ext}`;
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-        await fs.mkdir(uploadDir, { recursive: true });
-
-        const fullPath = path.join(uploadDir, safeFileName);
-        const fileBuffer = Buffer.from(await imageFile.arrayBuffer());
-        await fs.writeFile(fullPath, fileBuffer);
-
-        const imageUrl = `/uploads/${safeFileName}`;
+        const imageUrl = await uploadImageToStorage(imageFile, slug);
 
         const template: Template = {
             id: generateId(),

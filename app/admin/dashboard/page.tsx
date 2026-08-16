@@ -85,7 +85,25 @@ export default function AdminDashboard() {
                 body: formData,
             });
 
-            const data = await res.json();
+            let data: any = null;
+            try {
+                data = await res.json();
+            } catch (jsonError) {
+                const text = await res.text();
+                console.error('[UPLOAD_UI_DEBUG] Non-JSON response', {
+                    status: res.status,
+                    text,
+                    jsonError,
+                });
+
+                if (text.includes('Request Entity Too Large')) {
+                    showToast('error', 'Ukuran file terlalu besar untuk upload saat ini. Gunakan file di bawah 4MB.');
+                } else {
+                    showToast('error', 'Server mengembalikan respons yang tidak valid. Coba file yang lebih kecil.');
+                }
+                return;
+            }
+
             console.log('[UPLOAD_UI_DEBUG] Response status', res.status, data);
 
             if (data.success) {
