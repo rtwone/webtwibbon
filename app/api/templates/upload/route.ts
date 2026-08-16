@@ -1,11 +1,9 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { put } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
 import { saveTemplate, getTemplates, slugify, generateId, Template } from '@/lib/template-store';
 
 export const dynamic = 'force-dynamic';
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // Batas maksimal 4MB
 
 function getAllowedMimeType(file: File): string {
     const type = file.type?.toLowerCase();
@@ -21,43 +19,23 @@ function getAllowedMimeType(file: File): string {
     return type || 'application/octet-stream';
 }
 
-function hasBlobConfig(): boolean {
-    return Boolean(
-        process.env.BLOB_READ_WRITE_TOKEN ||
-        process.env.BLOB_TOKEN ||
-        process.env.BLOB_STORE_ID ||
-        process.env.VERCEL_OIDC_TOKEN ||
-        process.env.BLOB_WEBHOOK_PUBLIC_KEY
-    );
-}
-
+// Fungsi upload yang sekarang murni hanya mengirim data ke Vercel Blob
 async function uploadImageToStorage(imageFile: File, slug: string): Promise<string> {
     const ext = (imageFile.name.split('.').pop() || 'png').toLowerCase();
     const fileBuffer = Buffer.from(await imageFile.arrayBuffer());
 
-    if (hasBlobConfig()) {
-        const blob = await put(`templates/${slug}-${Date.now()}.${ext}`, fileBuffer, {
-            access: 'public',
-            contentType: imageFile.type || 'image/png',
-            addRandomSuffix: false,
-        });
-        return blob.url;
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+        throw new Error('BLOB_READ_WRITE_TOKEN belum diatur di environment variables.');
     }
 
-    const safeFileName = `${slug}.${ext}`;
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    await fs.mkdir(uploadDir, { recursive: true });
+    // Mengunggah file gambar ke folder 'templates/' di Vercel Blob
+    const blob = await put(`templates/${slug}-${Date.now()}.${ext}`, fileBuffer, {
+        access: 'public',
+        contentType: imageFile.type || 'image/png',
+        addRandomSuffix: false,
+    });
 
-    const fullPath = path.join(uploadDir, safeFileName);
-    try {
-        await fs.writeFile(fullPath, fileBuffer);
-        return `/uploads/${safeFileName}`;
-    } catch (error: any) {
-        if (error?.code === 'EROFS' || error?.message?.includes('read-only file system')) {
-            throw new Error('Upload storage is read-only in this environment. Configure Vercel Blob credentials for production hosting.');
-        }
-        throw error;
-    }
+    return blob.url;
 }
 
 export async function POST(req: NextRequest) {
@@ -92,18 +70,21 @@ export async function POST(req: NextRequest) {
 
         if (imageFile.size > MAX_UPLOAD_BYTES) {
             return NextResponse.json(
-                { success: false, message: 'Ukuran file terlalu besar untuk upload saat ini. Gunakan file di bawah 4MB.' },
+                { success: false, message: 'Ukuran file terlalu besar. Gunakan file di bawah 4MB.' },
                 { status: 400 }
             );
         }
 
         let slug = customSlug ? slugify(customSlug) : slugify(name);
+
+        // Membaca data list template yang ada di Vercel Blob
         const existing = await getTemplates();
 
         if (existing.some((t) => t.slug === slug)) {
             slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
         }
 
+        // Upload gambar twibbon ke Vercel Blob
         const imageUrl = await uploadImageToStorage(imageFile, slug);
 
         const template: Template = {
@@ -120,6 +101,7 @@ export async function POST(req: NextRequest) {
             createdAt: new Date().toISOString(),
         };
 
+        // Menyimpan data metadata teks ke file templates.json di Vercel Blob
         await saveTemplate(template);
 
         return NextResponse.json({

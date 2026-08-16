@@ -274,7 +274,7 @@ export default function AdminDashboard() {
                                                             ⤴
                                                         </div>
                                                         <span className="text-sm font-bold text-ink">Klik untuk memilih gambar</span>
-                                                        <span className="mt-1 text-xs text-muted">PNG, JPG, WebP — Maks 10MB</span>
+                                                        <span className="mt-1 text-xs text-muted">PNG, JPG, WebP — Maks 4MB</span>
                                                     </>
                                                 )}
                                                 <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} required />
