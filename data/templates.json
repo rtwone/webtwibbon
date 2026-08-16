@@ -1,5 +1,18 @@
 [
   {
+    "id": "tpl-1786898013042-6rawbc",
+    "slug": "anu",
+    "name": "Buriq",
+    "description": "asdfsdf",
+    "thumbnail": "/uploads/anu.png",
+    "image": "/uploads/anu.png",
+    "category": "umum",
+    "width": 1080,
+    "height": 1080,
+    "active": true,
+    "createdAt": "2026-08-16T16:33:33.042Z"
+  },
+  {
     "id": "tpl-1786651145249-gt8k3d",
     "slug": "twibbon-pkkmb",
     "name": "PKKMB Universitas Wiraraja 2026",
