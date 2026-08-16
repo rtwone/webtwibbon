@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
     title: 'Twibbon Platform',
-    description: 'Platform generator Twibbon profesional untuk superadmin dan user.',
+    description: 'Simple static landing page.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

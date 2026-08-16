@@ -1,14 +1,9 @@
-import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
-import { ADMIN_COOKIE } from '@/lib/auth';
-
 export default function HomePage() {
-    const cookieStore = cookies();
-    const isAuthed = cookieStore.get(ADMIN_COOKIE)?.value === 'authenticated';
-
-    if (isAuthed) {
-        redirect('/admin/dashboard');
-    } else {
-        redirect('/login');
-    }
+    return (
+        <main className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-900">
+            <div className="text-center">
+                <h1 className="text-4xl font-bold tracking-tight">hey there</h1>
+            </div>
+        </main>
+    );
 }
