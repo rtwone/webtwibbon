@@ -17,31 +17,47 @@ export interface Template {
 const BLOB_KEY = 'templates.json';
 
 function hasBlobConfig(): boolean {
-    return Boolean(process.env.BLOB_READ_WRITE_TOKEN && process.env.BLOB_READ_WRITE_TOKEN.trim() !== '');
+    const token = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!token || !token.trim()) {
+        console.warn('[template-store] BLOB_READ_WRITE_TOKEN tidak dikonfigurasi. Pastikan BLOB_READ_WRITE_TOKEN ada di .env.local');
+        return false;
+    }
+    return true;
 }
 
 async function readTemplates(): Promise<Template[]> {
     if (!hasBlobConfig()) {
+        console.warn('[readTemplates] Vercel Blob belum dikonfigurasi dengan BLOB_READ_WRITE_TOKEN');
         return [];
     }
 
     try {
+        console.log('[readTemplates] Membaca templates dari Vercel Blob...');
         const { blobs } = await list({ prefix: BLOB_KEY });
         const targetBlob = blobs.find((b) => b.pathname === BLOB_KEY);
 
         if (!targetBlob) {
-            return []; // Belum ada file templates.json sama sekali
+            console.log('[readTemplates] File templates.json belum ada di Vercel Blob');
+            return [];
         }
 
         // Tambahkan parameter cache-busting agar selalu mengambil data terbaru dari server Blob
         const res = await fetch(`${targetBlob.url}?t=${Date.now()}`, { cache: 'no-store' });
-        if (!res.ok) return [];
+        if (!res.ok) {
+            console.error('[readTemplates] Gagal fetch templates.json:', res.status, res.statusText);
+            return [];
+        }
 
         const raw = await res.text();
-        if (!raw.trim()) return [];
+        if (!raw.trim()) {
+            console.warn('[readTemplates] templates.json kosong');
+            return [];
+        }
 
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        const templates = Array.isArray(parsed) ? parsed : [];
+        console.log(`[readTemplates] Berhasil membaca ${templates.length} template(s) dari Vercel Blob`);
+        return templates;
     } catch (err) {
         console.error('[readTemplates] Error:', err instanceof Error ? err.message : String(err));
         return [];
