@@ -1,4 +1,6 @@
 import { list, put, del } from '@vercel/blob';
+import fs from 'fs/promises';
+import path from 'path';
 
 export interface Template {
     id: string;
@@ -28,7 +30,8 @@ function hasBlobConfig(): boolean {
 async function readTemplates(): Promise<Template[]> {
     if (!hasBlobConfig()) {
         console.warn('[readTemplates] Vercel Blob belum dikonfigurasi dengan BLOB_READ_WRITE_TOKEN');
-        return [];
+        // Fallback ke file lokal di development
+        return readTemplatesFromFile();
     }
 
     try {
@@ -37,15 +40,16 @@ async function readTemplates(): Promise<Template[]> {
         const targetBlob = blobs.find((b) => b.pathname === BLOB_KEY);
 
         if (!targetBlob) {
-            console.log('[readTemplates] File templates.json belum ada di Vercel Blob');
-            return [];
+            console.log('[readTemplates] File templates.json belum ada di Vercel Blob, fallback ke file lokal');
+            return readTemplatesFromFile();
         }
 
         // Tambahkan parameter cache-busting agar selalu mengambil data terbaru dari server Blob
         const res = await fetch(`${targetBlob.url}?t=${Date.now()}`, { cache: 'no-store' });
         if (!res.ok) {
             console.error('[readTemplates] Gagal fetch templates.json:', res.status, res.statusText);
-            return [];
+            // Fallback ke file lokal jika ada error
+            return readTemplatesFromFile();
         }
 
         const raw = await res.text();
@@ -60,6 +64,22 @@ async function readTemplates(): Promise<Template[]> {
         return templates;
     } catch (err) {
         console.error('[readTemplates] Error:', err instanceof Error ? err.message : String(err));
+        // Fallback ke file lokal jika ada error
+        return readTemplatesFromFile();
+    }
+}
+
+async function readTemplatesFromFile(): Promise<Template[]> {
+    try {
+        console.log('[readTemplatesFromFile] Membaca templates dari file lokal...');
+        const filePath = path.join(process.cwd(), 'data', 'templates.json');
+        const content = await fs.readFile(filePath, 'utf-8');
+        const parsed = JSON.parse(content);
+        const templates = Array.isArray(parsed) ? parsed : [];
+        console.log(`[readTemplatesFromFile] Berhasil membaca ${templates.length} template(s) dari file lokal`);
+        return templates;
+    } catch (err) {
+        console.warn('[readTemplatesFromFile] Gagal membaca file lokal:', err instanceof Error ? err.message : String(err));
         return [];
     }
 }
