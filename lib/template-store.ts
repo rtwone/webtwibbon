@@ -1,4 +1,4 @@
-import { list, put, del } from '@vercel/blob';
+import { put, del } from '@vercel/blob';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -16,41 +16,21 @@ export interface Template {
     createdAt: string;
 }
 
-const BLOB_KEY = 'templates.json';
-
-function hasBlobConfig(): boolean {
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token || !token.trim()) {
-        console.warn('[template-store] BLOB_READ_WRITE_TOKEN tidak dikonfigurasi. Pastikan BLOB_READ_WRITE_TOKEN ada di .env.local');
-        return false;
-    }
-    return true;
-}
+const BLOB_URL = 'https://umzn6iraxbcerpte.public.blob.vercel-storage.com/templates.json';
 
 async function readTemplates(): Promise<Template[]> {
-    if (!hasBlobConfig()) {
-        console.warn('[readTemplates] Vercel Blob belum dikonfigurasi dengan BLOB_READ_WRITE_TOKEN');
-        return [];
-    }
-
     try {
         console.log('[readTemplates] Membaca templates dari Vercel Blob...');
-        const { blobs } = await list({ prefix: BLOB_KEY });
-        const targetBlob = blobs.find((b) => b.pathname === BLOB_KEY);
-
-        if (!targetBlob) {
-            console.log('[readTemplates] File templates.json belum ada di Vercel Blob');
-            return [];
-        }
-
-        // PERBAIKAN: Gunakan `next: { revalidate: 0 }` alih-alih `{ cache: 'no-store' }` dan hapus query timestamp
-        const res = await fetch(targetBlob.url, {
+        
+        // Fetch langsung dari URL blob dengan cache busting
+        const res = await fetch(`${BLOB_URL}?t=${Date.now()}`, {
             next: { revalidate: 0 }
         });
 
         if (!res.ok) {
             console.error('[readTemplates] Gagal fetch templates.json:', res.status, res.statusText);
-            return [];
+            // Fallback ke file lokal jika ada error
+            return readTemplatesFromFile();
         }
 
         const raw = await res.text();
@@ -65,22 +45,40 @@ async function readTemplates(): Promise<Template[]> {
         return templates;
     } catch (err) {
         console.error('[readTemplates] Error:', err instanceof Error ? err.message : String(err));
+        // Fallback ke file lokal jika ada error
+        return readTemplatesFromFile();
+    }
+}
+
+async function readTemplatesFromFile(): Promise<Template[]> {
+    try {
+        console.log('[readTemplatesFromFile] Membaca templates dari file lokal...');
+        const filePath = path.join(process.cwd(), 'data', 'templates.json');
+        const content = await fs.readFile(filePath, 'utf-8');
+        const parsed = JSON.parse(content);
+        const templates = Array.isArray(parsed) ? parsed : [];
+        console.log(`[readTemplatesFromFile] Berhasil membaca ${templates.length} template(s) dari file lokal`);
+        return templates;
+    } catch (err) {
+        console.warn('[readTemplatesFromFile] Gagal membaca file lokal:', err instanceof Error ? err.message : String(err));
         return [];
     }
 }
 
 async function writeTemplates(templates: Template[]): Promise<void> {
-    if (!hasBlobConfig()) {
-        throw new Error('Token Vercel Blob tidak tersedia.');
+    try {
+        // Menggunakan allowOverwrite: true agar Vercel Blob mengizinkan menimpa file lama dengan path yang sama
+        await put(BLOB_URL.replace('https://umzn6iraxbcerpte.public.blob.vercel-storage.com/', ''), JSON.stringify(templates, null, 2), {
+            access: 'public',
+            contentType: 'application/json',
+            addRandomSuffix: false,
+            allowOverwrite: true,
+        });
+        console.log('[writeTemplates] Berhasil menyimpan templates ke Vercel Blob');
+    } catch (err) {
+        console.error('[writeTemplates] Error:', err instanceof Error ? err.message : String(err));
+        throw err;
     }
-
-    // Menggunakan allowOverwrite: true agar Vercel Blob mengizinkan menimpa file lama dengan path yang sama
-    await put(BLOB_KEY, JSON.stringify(templates, null, 2), {
-        access: 'public',
-        contentType: 'application/json',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-    });
 }
 
 export async function getTemplates(): Promise<Template[]> {
